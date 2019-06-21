@@ -1,6 +1,5 @@
 use ff::{Field, PrimeField, PrimeFieldRepr};
 use jubjub::*;
-use paired::bls12_381::{Bls12, Fr};
 
 #[derive(Copy, Clone)]
 pub enum Personalization {
@@ -40,11 +39,10 @@ where
 
     loop {
         let mut acc = E::Fs::zero();
-        let mut cur = E::Fs::one();
         let mut chunks_remaining = params.pedersen_hash_chunks_per_generator();
         let mut encountered_bits = false;
 
-        let mut scalar_table = params.pedersen_hash_scalar_table().iter();
+        let mut scalar_table = params.pedersen_hash_scalar_n_table().iter();
 
         // Grab three bits from the input
         while let Some(a) = bits.next() {
@@ -52,17 +50,19 @@ where
 
             encountered_bits = true;
 
-            let b = bits.next().unwrap_or(false);
-            let c = bits.next().unwrap_or(false);
+            let mut index = if a { 1 } else { 0 };
+            let mut x = 1;
+            for i in 0..(3 * JubjubBls12::pedersen_scalar_n()) - 1 {
+                {
+                    let bit = bits.next().unwrap_or(false);
+                    if bit {
+                        index += x;
+                    }
+                    x << 1;
 
-            {
-                let mut index = 0;
-                if a { index += 1};
-                if b { index += 2};
-                if c { index += 4};
-
-                let tmp = table[index];
-                acc.add_assign(&tmp);
+                    let tmp = table[index];
+                    acc.add_assign(&tmp);
+                }
             }
 
             chunks_remaining -= 1;
