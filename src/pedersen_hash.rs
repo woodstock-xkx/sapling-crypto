@@ -44,26 +44,26 @@ where
 
         let mut scalar_table = params.pedersen_hash_scalar_n_table().iter();
 
+        let n_groups = JubjubBls12::pedersen_scalar_n();
+        let bits_per_iteration = n_groups * 3;
+
         // Grab three bits from the input
         while let Some(a) = bits.next() {
             let table = scalar_table.next().expect("not enough scalar chunks");
 
             encountered_bits = true;
 
+
             let mut index = if a { 1 } else { 0 };
             let mut x = 1;
-            for i in 0..(3 * JubjubBls12::pedersen_scalar_n()) - 1 {
-                {
-                    let bit = bits.next().unwrap_or(false);
-                    if bit {
-                        index += x;
-                    }
-                    x << 1;
-
-                    let tmp = table[index];
-                    acc.add_assign(&tmp);
+            for _ in 0..bits_per_iteration - 1 {
+                if bits.next().unwrap_or(false) {
+                    index += x;
                 }
+                x <<= 1;
             }
+
+            acc.add_assign(&table[index]);
 
             chunks_remaining -= 1;
 
