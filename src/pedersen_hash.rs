@@ -1,5 +1,6 @@
 use ff::{Field, PrimeField, PrimeFieldRepr};
 use jubjub::*;
+use paired::bls12_381::{Bls12, Fr};
 
 #[derive(Copy, Clone)]
 pub enum Personalization {
@@ -43,38 +44,31 @@ where
         let mut chunks_remaining = params.pedersen_hash_chunks_per_generator();
         let mut encountered_bits = false;
 
+        let mut scalar_table = params.pedersen_hash_scalar_table().iter();
+
         // Grab three bits from the input
         while let Some(a) = bits.next() {
+            let table = scalar_table.next().expect("not enough scalar chunks");
+
             encountered_bits = true;
 
             let b = bits.next().unwrap_or(false);
             let c = bits.next().unwrap_or(false);
 
-            // Start computing this portion of the scalar
-            let mut tmp = cur;
-            if a {
-                tmp.add_assign(&cur);
-            }
-            cur.double(); // 2^1 * cur
-            if b {
-                tmp.add_assign(&cur);
-            }
+            {
+                let mut index = 0;
+                if a { index += 1};
+                if b { index += 2};
+                if c { index += 4};
 
-            // conditionally negate
-            if c {
-                tmp.negate();
+                let tmp = table[index];
+                acc.add_assign(&tmp);
             }
-
-            acc.add_assign(&tmp);
 
             chunks_remaining -= 1;
 
             if chunks_remaining == 0 {
                 break;
-            } else {
-                cur.double(); // 2^2 * cur
-                cur.double(); // 2^3 * cur
-                cur.double(); // 2^4 * cur
             }
         }
 

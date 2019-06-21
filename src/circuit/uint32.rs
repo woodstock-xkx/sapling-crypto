@@ -398,7 +398,7 @@ mod test {
         let mut rng = XorShiftRng::from_seed([0x5dbe6259, 0x8d313d76, 0x3237db17, 0xe5bc0653]);
 
         for _ in 0..1000 {
-            let mut v = (0..32)
+            let v = (0..32)
                 .map(|_| Boolean::constant(rng.gen()))
                 .collect::<Vec<_>>();
 
@@ -430,7 +430,7 @@ mod test {
         let mut rng = XorShiftRng::from_seed([0x5dbe6259, 0x8d313d76, 0x3237db17, 0xe5bc0653]);
 
         for _ in 0..1000 {
-            let mut v = (0..32)
+            let v = (0..32)
                 .map(|_| Boolean::constant(rng.gen()))
                 .collect::<Vec<_>>();
 

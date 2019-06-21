@@ -106,6 +106,8 @@ pub trait JubjubParams<E: JubjubEngine>: Sized {
     fn scale(&self) -> &E::Fr;
     /// Returns the generators (for each segment) used in all Pedersen commitments.
     fn pedersen_hash_generators(&self) -> &[edwards::Point<E, PrimeOrder>];
+    /// Returns the scalar table for Pedersen hashes.
+    fn pedersen_hash_scalar_table(&self) -> &[Vec<E::Fs>];
     /// Returns the exp table for Pedersen hashes.
     fn pedersen_hash_exp_table(&self) -> &[Vec<Vec<edwards::Point<E, PrimeOrder>>>];
     /// Returns the maximum number of chunks per segment of the Pedersen hash.
@@ -140,6 +142,7 @@ pub struct JubjubBls12 {
 
     pedersen_hash_generators: Vec<edwards::Point<Bls12, PrimeOrder>>,
     pedersen_hash_exp: Vec<Vec<Vec<edwards::Point<Bls12, PrimeOrder>>>>,
+    pedersen_hash_scalar: Vec<Vec<fs::Fs>>,
     pedersen_circuit_generators: Vec<Vec<Vec<(Fr, Fr)>>>,
 
     fixed_base_generators: Vec<edwards::Point<Bls12, PrimeOrder>>,
@@ -164,6 +167,9 @@ impl JubjubParams<Bls12> for JubjubBls12 {
     }
     fn pedersen_hash_exp_table(&self) -> &[Vec<Vec<edwards::Point<Bls12, PrimeOrder>>>] {
         &self.pedersen_hash_exp
+    }
+    fn pedersen_hash_scalar_table(&self) -> &[Vec<fs::Fs>] {
+        &self.pedersen_hash_scalar
     }
     fn pedersen_hash_chunks_per_generator(&self) -> usize {
         63
@@ -210,6 +216,7 @@ impl JubjubBls12 {
             // We'll initialize these below
             pedersen_hash_generators: vec![],
             pedersen_hash_exp: vec![],
+            pedersen_hash_scalar: vec![],
             pedersen_circuit_generators: vec![],
             fixed_base_generators: vec![],
             fixed_base_circuit_generators: vec![],
@@ -270,6 +277,63 @@ impl JubjubBls12 {
             }
 
             tmp_params.pedersen_hash_generators = pedersen_hash_generators;
+        }
+
+        // Create the scalar table for Pedersen hashing.
+        {
+            let mut pedersen_scalar = vec![];
+
+            let mut cur = <Bls12 as JubjubEngine>::Fs::one();
+
+            let mut num_bits = 0;
+            while num_bits <= fs::Fs::NUM_BITS {
+                let mut table = vec![cur; 8]; // FIXME: can be 7.
+
+                table[0] = cur.clone();
+                {
+                    let mut tmp = cur.clone();
+                    tmp.negate();
+                    table[4] = tmp;
+                }
+                {
+                    let mut tmp = cur.clone();
+                    tmp.add_assign(&cur);
+                    table[1] = tmp;
+                }
+                {
+                    let mut tmp = table[1].clone();
+                    tmp.negate();
+                    table[5] = tmp;
+                }
+                {
+                    let mut tmp = table[1].clone();
+                    tmp.add_assign(&cur);
+                    table[2] = tmp;
+                }
+                {
+                    let mut tmp = table[2].clone();
+                    tmp.negate();
+                    table[6] = tmp;
+                }
+                {
+                    let mut tmp = table[2].clone();
+                    tmp.add_assign(&cur);
+                    table[3] = tmp;
+                }
+                {
+                    let mut tmp = table[3].clone();
+                    tmp.negate();
+                    table[7] = tmp;
+                }
+                cur.double(); // 2^1 * cur
+                cur.double(); // 2^2 * cur
+                cur.double(); // 2^3 * cur
+                cur.double(); // 2^4 * cur
+                num_bits += 3;
+
+                pedersen_scalar.push(table);
+            }
+            tmp_params.pedersen_hash_scalar = pedersen_scalar;
         }
 
         // Create the exp table for the Pedersen hash generators
@@ -373,7 +437,7 @@ impl JubjubBls12 {
             let mut pedersen_circuit_generators = vec![];
 
             // Process each segment
-            for mut gen in tmp_params.pedersen_hash_generators.iter().cloned() {
+            for gen in tmp_params.pedersen_hash_generators.iter().cloned() {
                 let mut gen = montgomery::Point::from_edwards(&gen, &tmp_params);
                 let mut windows = vec![];
                 for _ in 0..tmp_params.pedersen_hash_chunks_per_generator() {
