@@ -53,9 +53,11 @@ where
 
             encountered_bits = true;
 
+            let mut index = 0;
 
-            let mut index = if a { 1 } else { 0 };
-            let mut x = 1;
+            if a { index += 1};
+
+            let mut x = 2;
             for _ in 0..bits_per_iteration - 1 {
                 if bits.next().unwrap_or(false) {
                     index += x;
