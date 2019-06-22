@@ -380,7 +380,6 @@ impl JubjubBls12 {
                 scalar_table_base += n;
                 num_bits += 3 * n;
             }
-            //dbg!(tables.clone());
             tmp_params.pedersen_hash_scalar_n = tables;
         }
 

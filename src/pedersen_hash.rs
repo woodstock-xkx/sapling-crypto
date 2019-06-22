@@ -29,7 +29,6 @@ where
     I: IntoIterator<Item = bool>,
     E: JubjubEngine,
 {
-    dbg!("pedersen hash entrypoint");
     let mut bits = personalization
         .get_bits()
         .into_iter()
@@ -42,29 +41,23 @@ where
     let bits_per_iteration = n_groups * 3;
 
     loop {
-        dbg!(params.pedersen_hash_scalar_n_table().len());
         let mut simple_scalar_table = params.pedersen_hash_scalar_table().iter();
         let mut scalar_table = params.pedersen_hash_scalar_n_table().iter();
         let mut acc = E::Fs::zero();
         let mut chunks_remaining = params.pedersen_hash_chunks_per_generator();
         let mut encountered_bits = false;
-
-        let mut iteration = 0;
-
         let mut stashed_acc = E::Fs::zero();
         let mut stashed_bits = Vec::new(); // FIXME: Reuse allocation?
+
         let stashed_chunks_remaining = chunks_remaining;
         let mut incomplete_final_bits = false;
         'outer: while let Some(a) = bits.next() {
             stashed_bits.push(a);
 
             let table = scalar_table.next().expect("not enough scalar chunks");
-            iteration += 1;
-            dbg!(iteration);
             encountered_bits = true;
 
             let mut index = 0;
-            dbg!(a);
             if a {
                 index += 1
             };
@@ -77,12 +70,10 @@ where
                 match unwrapped_bit {
                     Some(bit) => {
                         bit_count += 1;
-                        dbg!(bit_count);
                         if bit_count % 3 == 0 {
                             chunks_remaining -= 1;
                         }
                         if chunks_remaining == 0 {
-                            dbg!("reached end of chunks");
                             stashed_bits.push(bit);
                             if (bits_per_iteration - bit_count) >= 3 {
                                 incomplete_final_bits = true;
@@ -99,9 +90,7 @@ where
                 }
                 let bit = unwrapped_bit.unwrap_or(false);
                 stashed_bits.push(bit);
-                dbg!(bit);
                 if bit {
-                    dbg!(x);
                     index += x;
                 }
                 x <<= 1;
@@ -109,16 +98,9 @@ where
 
             let scalar_for_bits = &table[index];
             acc.add_assign(scalar_for_bits);
-            dbg!(acc);
-            dbg!(index);
-            dbg!(scalar_for_bits);
-
-            //chunks_remaining -= (bit_count as f32 / 3.0).ceil() as usize;
-            dbg!(chunks_remaining);
 
             if chunks_remaining == 0 {
                 stashed_acc = acc.clone();
-                dbg!("breaking");
                 break;
             }
         }
@@ -128,7 +110,6 @@ where
             acc = stashed_acc;
             chunks_remaining = stashed_chunks_remaining;
             let mut bits = stashed_bits.into_iter();
-            dbg!("incomplete final bits");
 
             while let Some(a) = bits.next() {
                 let table = simple_scalar_table
@@ -164,14 +145,12 @@ where
             }
         }
 
-        dbg!("done with  bits");
         if !encountered_bits {
             break;
         }
 
         let mut table: &[Vec<edwards::Point<E, _>>] =
             &generators.next().expect("we don't have enough generators");
-        dbg!("got generator");
         let window = JubjubBls12::pedersen_hash_exp_window_size();
         let window_mask = (1 << window) - 1;
 
