@@ -5,10 +5,10 @@ extern crate paired;
 extern crate rand;
 extern crate test;
 
-use paired::bls12_381::Bls12;
-use rand::{thread_rng, Rand};
 use fil_sapling_crypto::jubjub::JubjubBls12;
 use fil_sapling_crypto::pedersen_hash::{pedersen_hash, Personalization};
+use paired::bls12_381::Bls12;
+use rand::{thread_rng, Rand};
 
 #[bench]
 fn bench_pedersen_hash(b: &mut test::Bencher) {

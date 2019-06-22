@@ -43,14 +43,21 @@ where
 
     loop {
         dbg!(params.pedersen_hash_scalar_n_table().len());
+        let mut simple_scalar_table = params.pedersen_hash_scalar_table().iter();
         let mut scalar_table = params.pedersen_hash_scalar_n_table().iter();
         let mut acc = E::Fs::zero();
         let mut chunks_remaining = params.pedersen_hash_chunks_per_generator();
         let mut encountered_bits = false;
 
         let mut iteration = 0;
-        // Grab three bits from the input
-        while let Some(a) = bits.next() {
+
+        let mut stashed_acc = E::Fs::zero();
+        let mut stashed_bits = Vec::new(); // FIXME: Reuse allocation?
+        let stashed_chunks_remaining = chunks_remaining;
+        let mut incomplete_final_bits = false;
+        'outer: while let Some(a) = bits.next() {
+            stashed_bits.push(a);
+
             let table = scalar_table.next().expect("not enough scalar chunks");
             iteration += 1;
             dbg!(iteration);
@@ -63,13 +70,18 @@ where
             };
             let mut x = 2;
 
+            let mut bit_count = 1;
             for _ in 0..bits_per_iteration - 1 {
                 let unwrapped_bit = bits.next();
-                if unwrapped_bit.is_none()// && (index % 3 == 2)
-                    {
-                    break;
+                if unwrapped_bit.is_none() && (bits_per_iteration - bit_count) >= 3
+                {
+                    dbg!(bit_count);
+                    incomplete_final_bits = true;
+                    break 'outer;
                 }
                 let bit = unwrapped_bit.unwrap_or(false);
+                bit_count += 1;
+                stashed_bits.push(bit);
                 dbg!(bit);
                 if bit {
                     dbg!(x);
@@ -88,10 +100,53 @@ where
             chunks_remaining -= 1;
 
             if chunks_remaining == 0 {
+                stashed_acc = acc.clone();
                 dbg!("breaking");
                 break;
             }
         }
+        //stashed_acc = acc.clone();
+
+        if incomplete_final_bits {
+            acc = stashed_acc;
+            chunks_remaining = stashed_chunks_remaining;
+            let mut bits = stashed_bits.into_iter();
+            dbg!("incomplete final bits");
+
+            while let Some(a) = bits.next() {
+                let table = simple_scalar_table
+                    .next()
+                    .expect("not enough scalar chunks");
+
+                encountered_bits = true;
+
+                let b = bits.next().unwrap_or(false);
+                let c = bits.next().unwrap_or(false);
+
+                {
+                    let mut index = 0;
+                    if a {
+                        index += 1
+                    };
+                    if b {
+                        index += 2
+                    };
+                    if c {
+                        index += 4
+                    };
+
+                    let tmp = table[index];
+                    acc.add_assign(&tmp);
+                }
+
+                chunks_remaining -= 1;
+
+                if chunks_remaining == 0 {
+                    break;
+                }
+            }
+        }
+
         dbg!("done with  bits");
         if !encountered_bits {
             break;

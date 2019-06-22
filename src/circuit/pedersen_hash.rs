@@ -153,7 +153,7 @@ mod test {
         let mut rng = XorShiftRng::from_seed([0x3dbe6259, 0x8d313d76, 0x3237db17, 0xe5bc0654]);
         let params = &JubjubBls12::new();
 
-        for length in 2..751 {
+        for length in 0..751 {
             for _ in 0..5 {
                 let input: Vec<bool> = (0..length).map(|_| rng.gen()).collect();
 
