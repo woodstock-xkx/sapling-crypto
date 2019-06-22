@@ -75,7 +75,7 @@ where
                 let unwrapped_bit = bits.next();
 
                 match unwrapped_bit {
-                    Some(_) => {
+                    Some(bit) => {
                         bit_count += 1;
                         dbg!(bit_count);
                         if bit_count % 3 == 0 {
@@ -83,6 +83,7 @@ where
                         }
                         if chunks_remaining == 0 {
                             dbg!("reached end of chunks");
+                            stashed_bits.push(bit);
                             if (bits_per_iteration - bit_count) >= 3 {
                                 incomplete_final_bits = true;
                             }
