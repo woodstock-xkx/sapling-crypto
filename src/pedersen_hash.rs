@@ -73,14 +73,27 @@ where
             let mut bit_count = 1;
             for _ in 0..bits_per_iteration - 1 {
                 let unwrapped_bit = bits.next();
-                if unwrapped_bit.is_none() && (bits_per_iteration - bit_count) >= 3
-                {
-                    dbg!(bit_count);
-                    incomplete_final_bits = true;
-                    break 'outer;
+
+                match unwrapped_bit {
+                    Some(_) => {
+                        bit_count += 1;
+                        dbg!(bit_count);
+                        if bit_count % 3 == 0 {
+                            chunks_remaining -= 1;
+                        }
+                        if chunks_remaining == 0 {
+                            dbg!("reached end of chunks");
+                            break 'outer;
+                        }
+                    }
+                    None => {
+                        if (bits_per_iteration - bit_count) >= 3 {
+                            incomplete_final_bits = true;
+                            break 'outer;
+                        }
+                    }
                 }
                 let bit = unwrapped_bit.unwrap_or(false);
-                bit_count += 1;
                 stashed_bits.push(bit);
                 dbg!(bit);
                 if bit {
@@ -96,8 +109,8 @@ where
             dbg!(index);
             dbg!(scalar_for_bits);
 
+            //chunks_remaining -= (bit_count as f32 / 3.0).ceil() as usize;
             dbg!(chunks_remaining);
-            chunks_remaining -= 1;
 
             if chunks_remaining == 0 {
                 stashed_acc = acc.clone();
