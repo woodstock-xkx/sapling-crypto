@@ -83,6 +83,9 @@ where
                         }
                         if chunks_remaining == 0 {
                             dbg!("reached end of chunks");
+                            if (bits_per_iteration - bit_count) >= 3 {
+                                incomplete_final_bits = true;
+                            }
                             break 'outer;
                         }
                     }
