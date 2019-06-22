@@ -176,7 +176,7 @@ impl JubjubParams<Bls12> for JubjubBls12 {
         &self.pedersen_hash_scalar
     }
     fn pedersen_hash_scalar_n_table(&self) -> &[Vec<fs::Fs>] {
-        &self.pedersen_hash_scalar
+        &self.pedersen_hash_scalar_n
     }
     fn pedersen_hash_chunks_per_generator(&self) -> usize {
         63
@@ -197,7 +197,7 @@ impl JubjubParams<Bls12> for JubjubBls12 {
         8
     }
     fn pedersen_scalar_n() -> usize {
-        1
+        2
     }
 }
 
@@ -298,7 +298,7 @@ impl JubjubBls12 {
 
             let mut num_bits = 0;
             while num_bits <= fs::Fs::NUM_BITS {
-                let mut table = vec![cur; 8]; // FIXME: can be 7.
+                let mut table = vec![cur; 8];
 
                 table[0] = cur.clone();
                 {
@@ -351,51 +351,38 @@ impl JubjubBls12 {
         {
             let mut tables = vec![];
             let scalar_tables = &tmp_params.pedersen_hash_scalar;
-            dbg!(scalar_tables.len());
             let n = JubjubBls12::pedersen_scalar_n();
 
             let table_size = 1 << (3 * n);
 
             let mut scalar_table_base = 0;
 
-            let mut num_bits : usize = 0;
+            let mut num_bits: usize = 0;
             while num_bits <= fs::Fs::NUM_BITS as usize {
-                dbg!("first");
                 let mut table = Vec::with_capacity(table_size);
                 for i in 0..table_size {
-                    dbg!("outer");
                     let mut tmp = <Bls12 as JubjubEngine>::Fs::zero();
                     let mut idx = i;
                     for t in 0..n {
-                        dbg!("top");
                         let x = idx & 7;
                         // The last group of tables may be incomplete, if n does not divide the
                         // total number of scalar tables.
                         let scalar_table_index = scalar_table_base + t;
-                        dbg!(scalar_table_index);
-                        dbg!(x);
-                        if scalar_table_index >= scalar_tables.len() { break; }
+                        if scalar_table_index >= scalar_tables.len() {
+                            break;
+                        }
                         tmp.add_assign(&scalar_tables[scalar_table_index][x]);
-                        dbg!("completed");
                         idx = idx >> 3;
                     }
-                    dbg!("next");
                     table.push(tmp);
-                    dbg!("aaa");
                 }
-                dbg!("done");
                 tables.push(table);
                 scalar_table_base += n;
                 num_bits += 3 * n;
-                dbg!(num_bits);
-
-                dbg!("bottom");
             }
-
-           tmp_params.pedersen_hash_scalar_n = tables;
+            //dbg!(tables.clone());
+            tmp_params.pedersen_hash_scalar_n = tables;
         }
-        assert_eq!(tmp_params.pedersen_hash_scalar, tmp_params.pedersen_hash_scalar_n);
-        assert_eq!(tmp_params.pedersen_hash_scalar.len(), tmp_params.pedersen_hash_scalar_n.len());
 
         // Create the exp table for the Pedersen hash generators
         {

@@ -29,6 +29,7 @@ where
     I: IntoIterator<Item = bool>,
     E: JubjubEngine,
 {
+    dbg!("pedersen hash entrypoint");
     let mut bits = personalization
         .get_bits()
         .into_iter()
@@ -37,49 +38,68 @@ where
     let mut result = edwards::Point::zero();
     let mut generators = params.pedersen_hash_exp_table().iter();
 
+    let n_groups = JubjubBls12::pedersen_scalar_n();
+    let bits_per_iteration = n_groups * 3;
+
     loop {
+        dbg!(params.pedersen_hash_scalar_n_table().len());
+        let mut scalar_table = params.pedersen_hash_scalar_n_table().iter();
         let mut acc = E::Fs::zero();
         let mut chunks_remaining = params.pedersen_hash_chunks_per_generator();
         let mut encountered_bits = false;
 
-        let mut scalar_table = params.pedersen_hash_scalar_n_table().iter();
-
-        let n_groups = JubjubBls12::pedersen_scalar_n();
-        let bits_per_iteration = n_groups * 3;
-
+        let mut iteration = 0;
         // Grab three bits from the input
         while let Some(a) = bits.next() {
             let table = scalar_table.next().expect("not enough scalar chunks");
-
+            iteration += 1;
+            dbg!(iteration);
             encountered_bits = true;
 
             let mut index = 0;
-
-            if a { index += 1};
-
+            dbg!(a);
+            if a {
+                index += 1
+            };
             let mut x = 2;
+
             for _ in 0..bits_per_iteration - 1 {
-                if bits.next().unwrap_or(false) {
+                let unwrapped_bit = bits.next();
+                if unwrapped_bit.is_none()// && (index % 3 == 2)
+                    {
+                    break;
+                }
+                let bit = unwrapped_bit.unwrap_or(false);
+                dbg!(bit);
+                if bit {
+                    dbg!(x);
                     index += x;
                 }
                 x <<= 1;
             }
 
-            acc.add_assign(&table[index]);
+            let scalar_for_bits = &table[index];
+            acc.add_assign(scalar_for_bits);
+            dbg!(acc);
+            dbg!(index);
+            dbg!(scalar_for_bits);
 
+            dbg!(chunks_remaining);
             chunks_remaining -= 1;
 
             if chunks_remaining == 0 {
+                dbg!("breaking");
                 break;
             }
         }
-
+        dbg!("done with  bits");
         if !encountered_bits {
             break;
         }
 
         let mut table: &[Vec<edwards::Point<E, _>>] =
             &generators.next().expect("we don't have enough generators");
+        dbg!("got generator");
         let window = JubjubBls12::pedersen_hash_exp_window_size();
         let window_mask = (1 << window) - 1;
 
