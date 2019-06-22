@@ -104,7 +104,6 @@ where
                 break;
             }
         }
-        //stashed_acc = acc.clone();
 
         if incomplete_final_bits {
             acc = stashed_acc;
