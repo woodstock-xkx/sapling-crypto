@@ -194,10 +194,10 @@ impl JubjubParams<Bls12> for JubjubBls12 {
         &self.fixed_base_circuit_generators[base as usize][..]
     }
     fn pedersen_hash_exp_window_size() -> u32 {
-        16
+        8
     }
     fn pedersen_scalar_n() -> usize {
-        6
+        2
     }
 }
 

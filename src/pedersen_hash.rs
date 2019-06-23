@@ -39,60 +39,69 @@ where
 
     let n_groups = JubjubBls12::pedersen_scalar_n();
     let bits_per_iteration = n_groups * 3;
-
+    dbg!("pedersen hash");
     loop {
-        let mut simple_scalar_table = params.pedersen_hash_scalar_table().iter();
+        dbg!("outer pedersen loop start");
+        //let mut simple_scalar_table = params.pedersen_hash_scalar_table().iter();
+        let simple_scalar_tables = params.pedersen_hash_scalar_table();
         let mut scalar_table = params.pedersen_hash_scalar_n_table().iter();
         let mut acc = E::Fs::zero();
         let mut chunks_remaining = params.pedersen_hash_chunks_per_generator();
         let mut encountered_bits = false;
         let mut stashed_acc = E::Fs::zero();
-        let mut stashed_bits = Vec::new(); // FIXME: Reuse allocation?
 
         let stashed_chunks_remaining = chunks_remaining;
+
+        let mut bit_count = 0;
+        let mut index = 0;
         let mut incomplete_final_bits = false;
+        let mut iteration=0;
         'outer: while let Some(a) = bits.next() {
-            stashed_bits.push(a);
+            iteration += 1;
+            dbg!(iteration);
 
             let table = scalar_table.next().expect("not enough scalar chunks");
             encountered_bits = true;
 
-            let mut index = 0;
+            index = 0;
             if a {
                 index += 1
             };
             let mut x = 2;
 
-            let mut bit_count = 1;
+            bit_count = 1;
+            dbg!(a);
             for _ in 0..bits_per_iteration - 1 {
                 let unwrapped_bit = bits.next();
 
                 match unwrapped_bit {
                     Some(bit) => {
+                        dbg!(bit);
                         bit_count += 1;
+                        if bit {
+                            index += x;
+                        }
                         if bit_count % 3 == 0 {
                             chunks_remaining -= 1;
                         }
                         if chunks_remaining == 0 {
-                            stashed_bits.push(bit);
                             if (bits_per_iteration - bit_count) >= 3 {
+                                stashed_acc = acc.clone();
                                 incomplete_final_bits = true;
                             }
                             break 'outer;
                         }
                     }
                     None => {
+                        dbg!("no bit");
                         if (bits_per_iteration - bit_count) >= 3 {
+                            stashed_acc = acc.clone();
                             incomplete_final_bits = true;
                             break 'outer;
                         }
                     }
                 }
                 let bit = unwrapped_bit.unwrap_or(false);
-                stashed_bits.push(bit);
-                if bit {
-                    index += x;
-                }
                 x <<= 1;
             }
 
@@ -106,35 +115,29 @@ where
         }
 
         if incomplete_final_bits {
+            dbg!("incomplete final bits");
+            dbg!(acc);
             acc = stashed_acc;
             chunks_remaining = stashed_chunks_remaining;
-            let mut bits = stashed_bits.into_iter();
 
-            while let Some(a) = bits.next() {
-                let table = simple_scalar_table
-                    .next()
-                    .expect("not enough scalar chunks");
+            let groups = bit_count / 3 + if bit_count % 3 == 0 { 0 } else { 1 };
+            let mut bit_source = index;
+
+            dbg!(bit_source);
+            for i in 0..groups {
+                let table = &simple_scalar_tables[i + (iteration - 1) * n_groups];
 
                 encountered_bits = true;
 
-                let b = bits.next().unwrap_or(false);
-                let c = bits.next().unwrap_or(false);
+                let index = bit_source & 7;
+                bit_source >>= 3;
+                bit_count -= 3;
 
-                {
-                    let mut index = 0;
-                    if a {
-                        index += 1
-                    };
-                    if b {
-                        index += 2
-                    };
-                    if c {
-                        index += 4
-                    };
-
-                    let tmp = table[index];
-                    acc.add_assign(&tmp);
-                }
+                dbg!(index);
+                let tmp = table[index];
+                acc.add_assign(&tmp);
+                dbg!(tmp);
+                dbg!(acc);
 
                 chunks_remaining -= 1;
 
