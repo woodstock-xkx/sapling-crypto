@@ -39,10 +39,7 @@ where
 
     let n_groups = JubjubBls12::pedersen_scalar_n();
     let bits_per_iteration = n_groups * 3;
-    dbg!("pedersen hash");
     loop {
-        dbg!("outer pedersen loop start");
-        //let mut simple_scalar_table = params.pedersen_hash_scalar_table().iter();
         let simple_scalar_tables = params.pedersen_hash_scalar_table();
         let mut scalar_table = params.pedersen_hash_scalar_n_table().iter();
         let mut acc = E::Fs::zero();
@@ -58,7 +55,6 @@ where
         let mut iteration=0;
         'outer: while let Some(a) = bits.next() {
             iteration += 1;
-            dbg!(iteration);
 
             let table = scalar_table.next().expect("not enough scalar chunks");
             encountered_bits = true;
@@ -70,13 +66,11 @@ where
             let mut x = 2;
 
             bit_count = 1;
-            dbg!(a);
             for _ in 0..bits_per_iteration - 1 {
                 let unwrapped_bit = bits.next();
 
                 match unwrapped_bit {
                     Some(bit) => {
-                        dbg!(bit);
                         bit_count += 1;
                         if bit {
                             index += x;
@@ -86,22 +80,20 @@ where
                         }
                         if chunks_remaining == 0 {
                             if (bits_per_iteration - bit_count) >= 3 {
-                                stashed_acc = acc.clone();
+                                stashed_acc = acc;
                                 incomplete_final_bits = true;
                             }
                             break 'outer;
                         }
                     }
                     None => {
-                        dbg!("no bit");
                         if (bits_per_iteration - bit_count) >= 3 {
-                            stashed_acc = acc.clone();
+                            stashed_acc = acc;
                             incomplete_final_bits = true;
                             break 'outer;
                         }
                     }
                 }
-                let bit = unwrapped_bit.unwrap_or(false);
                 x <<= 1;
             }
 
@@ -109,21 +101,18 @@ where
             acc.add_assign(scalar_for_bits);
 
             if chunks_remaining == 0 {
-                stashed_acc = acc.clone();
+                stashed_acc = acc;
                 break;
             }
         }
 
         if incomplete_final_bits {
-            dbg!("incomplete final bits");
-            dbg!(acc);
             acc = stashed_acc;
             chunks_remaining = stashed_chunks_remaining;
 
             let groups = bit_count / 3 + if bit_count % 3 == 0 { 0 } else { 1 };
             let mut bit_source = index;
 
-            dbg!(bit_source);
             for i in 0..groups {
                 let table = &simple_scalar_tables[i + (iteration - 1) * n_groups];
 
@@ -133,11 +122,8 @@ where
                 bit_source >>= 3;
                 bit_count -= 3;
 
-                dbg!(index);
                 let tmp = table[index];
                 acc.add_assign(&tmp);
-                dbg!(tmp);
-                dbg!(acc);
 
                 chunks_remaining -= 1;
 
