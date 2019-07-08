@@ -197,7 +197,7 @@ impl JubjubParams<Bls12> for JubjubBls12 {
         8
     }
     fn pedersen_scalar_n() -> usize {
-        2
+        4
     }
 }
 
