@@ -124,7 +124,7 @@ pub trait JubjubParams<E: JubjubEngine>: Sized {
     fn circuit_generators(&self, FixedGenerators) -> &[Vec<(E::Fr, E::Fr)>];
     /// Returns the window size for exponentiation of Pedersen hash generators
     /// outside the circuit
-    fn pedersen_hash_exp_window_size() -> u32;
+    fn pedersen_hash_exp_window_size(&self) -> u32;
 }
 
 impl JubjubEngine for Bls12 {
@@ -144,6 +144,7 @@ pub struct JubjubBls12 {
 
     fixed_base_generators: Vec<edwards::Point<Bls12, PrimeOrder>>,
     fixed_base_circuit_generators: Vec<Vec<Vec<(Fr, Fr)>>>,
+    pedersen_hash_exp_window_size_supplied: u32,
 }
 
 impl JubjubParams<Bls12> for JubjubBls12 {
@@ -180,13 +181,17 @@ impl JubjubParams<Bls12> for JubjubBls12 {
     fn circuit_generators(&self, base: FixedGenerators) -> &[Vec<(Fr, Fr)>] {
         &self.fixed_base_circuit_generators[base as usize][..]
     }
-    fn pedersen_hash_exp_window_size() -> u32 {
-        16
+    fn pedersen_hash_exp_window_size(&self) -> u32 {
+        self.pedersen_hash_exp_window_size_supplied
     }
 }
 
 impl JubjubBls12 {
     pub fn new() -> Self {
+        Self::new_with_window_size(8)
+    }
+
+    pub fn new_with_window_size(window_size: u32) -> Self {
         let montgomery_a = Fr::from_str("40962").unwrap();
         let mut montgomery_2a = montgomery_a;
         montgomery_2a.double();
@@ -213,6 +218,7 @@ impl JubjubBls12 {
             pedersen_circuit_generators: vec![],
             fixed_base_generators: vec![],
             fixed_base_circuit_generators: vec![],
+            pedersen_hash_exp_window_size_supplied: window_size,
         };
 
         fn find_group_hash<E: JubjubEngine>(
@@ -279,7 +285,7 @@ impl JubjubBls12 {
             for g in &tmp_params.pedersen_hash_generators {
                 let mut g = g.clone();
 
-                let window = JubjubBls12::pedersen_hash_exp_window_size();
+                let window = window_size;
 
                 let mut tables = vec![];
 
@@ -373,7 +379,7 @@ impl JubjubBls12 {
             let mut pedersen_circuit_generators = vec![];
 
             // Process each segment
-            for mut gen in tmp_params.pedersen_hash_generators.iter().cloned() {
+            for gen in tmp_params.pedersen_hash_generators.iter().cloned() {
                 let mut gen = montgomery::Point::from_edwards(&gen, &tmp_params);
                 let mut windows = vec![];
                 for _ in 0..tmp_params.pedersen_hash_chunks_per_generator() {

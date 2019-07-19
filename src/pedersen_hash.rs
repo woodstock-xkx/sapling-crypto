@@ -84,7 +84,7 @@ where
 
         let mut table: &[Vec<edwards::Point<E, _>>] =
             &generators.next().expect("we don't have enough generators");
-        let window = JubjubBls12::pedersen_hash_exp_window_size();
+        let window = params.pedersen_hash_exp_window_size();
         let window_mask = (1 << window) - 1;
 
         let mut acc = acc.into_repr();
