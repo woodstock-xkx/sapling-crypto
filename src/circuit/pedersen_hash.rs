@@ -121,7 +121,7 @@ mod test {
     #[test]
     fn test_pedersen_hash_constraints() {
         let mut rng = XorShiftRng::from_seed([0x3dbe6259, 0x8d313d76, 0x3237db17, 0xe5bc0654]);
-        let params = &JubjubBls12::new();
+        let params = &JubjubBls12::new_with_window_size(16);
         let mut cs = TestConstraintSystem::<Bls12>::new();
 
         let input: Vec<bool> = (0..(Fr::NUM_BITS * 2)).map(|_| rng.gen()).collect();
@@ -151,7 +151,7 @@ mod test {
     #[test]
     fn test_pedersen_hash() {
         let mut rng = XorShiftRng::from_seed([0x3dbe6259, 0x8d313d76, 0x3237db17, 0xe5bc0654]);
-        let params = &JubjubBls12::new();
+        let params = &JubjubBls12::new_with_window_size(16);
 
         for length in 0..751 {
             for _ in 0..5 {
