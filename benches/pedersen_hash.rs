@@ -29,3 +29,21 @@ fn bench_pedersen_hash_16(b: &mut test::Bencher) {
     let params = JubjubBls12::new_with_window_size(16);
     bench_pedersen_hash_aux(b, params);
 }
+
+#[bench]
+fn bench_pedersen_hash_17(b: &mut test::Bencher) {
+    let params = JubjubBls12::new_with_window_size(17);
+    bench_pedersen_hash_aux(b, params);
+}
+
+#[bench]
+fn bench_pedersen_hash_18(b: &mut test::Bencher) {
+    let params = JubjubBls12::new_with_window_size(18);
+    bench_pedersen_hash_aux(b, params);
+}
+
+#[bench]
+fn bench_pedersen_hash_19(b: &mut test::Bencher) {
+    let params = JubjubBls12::new_with_window_size(19);
+    bench_pedersen_hash_aux(b, params);
+}
