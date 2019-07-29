@@ -29,3 +29,4 @@ default = []
 [package.metadata.release]
 pre-release-commit-message = "chore(release): release {{version}}"
 pro-release-commit-message = "chore(release): starting development cycle for {{next_version}}"
+no-dev-version = true
