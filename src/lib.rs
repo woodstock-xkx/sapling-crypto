@@ -2,7 +2,6 @@ extern crate bellperson;
 extern crate blake2b_simd;
 extern crate blake2s_simd;
 extern crate byteorder;
-extern crate digest;
 extern crate ff;
 extern crate paired;
 extern crate rand;
@@ -13,6 +12,9 @@ extern crate hex_literal;
 
 #[cfg(test)]
 extern crate crypto;
+
+#[cfg(test)]
+extern crate digest;
 
 pub mod circuit;
 pub mod constants;
