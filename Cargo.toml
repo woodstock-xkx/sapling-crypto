@@ -7,7 +7,12 @@ documentation = "https://github.com/zcash-hackworks/sapling"
 homepage = "https://github.com/filecoin-project/sapling-crypto"
 license = "MIT/Apache-2.0"
 repository = "https://github.com/filecoin-project/sapling-crypto"
-version = "0.1.1-alpha.0"
+version = "0.1.1"
+
+[package.metadata.release]
+pre-release-commit-message = "chore(release): release {{version}}"
+pro-release-commit-message = "chore(release): starting development cycle for {{next_version}}"
+no-dev-version = true
 
 [dependencies]
 rand = "0.4"
@@ -25,8 +30,3 @@ rust-crypto = "0.2"
 
 [features]
 default = []
-
-[package.metadata.release]
-pre-release-commit-message = "chore(release): release {{version}}"
-pro-release-commit-message = "chore(release): starting development cycle for {{next_version}}"
-no-dev-version = true
