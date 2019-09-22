@@ -221,28 +221,6 @@ impl JubjubBls12 {
             pedersen_hash_exp_window_size_supplied: window_size,
         };
 
-        fn find_group_hash<E: JubjubEngine>(
-            m: &[u8],
-            personalization: &[u8; 8],
-            params: &E::Params,
-        ) -> edwards::Point<E, PrimeOrder> {
-            let mut tag = m.to_vec();
-            let i = tag.len();
-            tag.push(0u8);
-
-            loop {
-                let gh = group_hash(&tag, personalization, params);
-
-                // We don't want to overflow and start reusing generators
-                assert!(tag[i] != u8::max_value());
-                tag[i] += 1;
-
-                if let Some(gh) = gh {
-                    break gh;
-                }
-            }
-        }
-
         // Create the bases for the Pedersen hashes
         {
             let mut pedersen_hash_generators = vec![];
@@ -432,6 +410,102 @@ impl JubjubBls12 {
 
         tmp_params
     }
+}
+
+fn find_group_hash<E: JubjubEngine>(
+    m: &[u8],
+    personalization: &[u8; 8],
+    params: &E::Params,
+) -> edwards::Point<E, PrimeOrder> {
+    let mut tag = m.to_vec();
+    let i = tag.len();
+    tag.push(0u8);
+
+    loop {
+        let gh = group_hash(&tag, personalization, params);
+
+        // We don't want to overflow and start reusing generators
+        assert!(tag[i] != u8::max_value());
+        tag[i] += 1;
+
+        if let Some(gh) = gh {
+            break gh;
+        }
+    }
+}
+
+/// Generates the Pedersen Hash parameters for a range of segments, as opposed to
+/// `JubjubBls12::new()` which only generates Pedersen Hash parameters for the first 5 segments.
+pub fn pedersen_hash_params_for_segments(
+    first_segment: u32,
+    n_segments: u32,
+    window_size: u32,
+) -> JubjubBls12 {
+    // We only generate the subset of parameters that are used by
+    // `crate::pedersen_hash::pedersen_hash()`. The Edward's Curve `d` parameter, Pedersen Hash
+    // window-size, and Pedersen Hash exponentiation tables are the only parameters that are used
+    // during Pedersen hashing.
+    let mut params = JubjubBls12 {
+        edwards_d: Fr::from_str(
+            "19257038036680949359750312669786877991949435402254120286184196891950884077233",
+        )
+        .unwrap(),
+        pedersen_hash_exp_window_size_supplied: window_size,
+        pedersen_hash_exp: vec![],
+        // The remaining fields are not used during Pedersen Hashing, so we won't set them.
+        montgomery_a: Fr::zero(),
+        montgomery_2a: Fr::zero(),
+        scale: Fr::zero(),
+        pedersen_hash_generators: vec![],
+        pedersen_circuit_generators: vec![],
+        fixed_base_generators: vec![],
+        fixed_base_circuit_generators: vec![],
+    };
+
+    // Generate the Pedersen Hash exponentiation tables.
+    params.pedersen_hash_exp = (first_segment..first_segment + n_segments)
+        .map(|segment_index| {
+            let segment_index_bytes = segment_index.to_le_bytes();
+
+            // Hash the segment index as little-endian bytes into the prime order JubJub Elliptic
+            // Curve subgroup.
+            let mut generator = find_group_hash(
+                &segment_index_bytes,
+                constants::PEDERSEN_HASH_GENERATORS_PERSONALIZATION,
+                &params,
+            );
+
+            // NOTE: It is the user's responsibility to ensure that no generator is duplicated as this
+            // function does not have access to every generator used prior to `first_segment`. Here
+            // we assume that hash-to-group functions as expected (does not return the same point
+            // for any two preimages and does not return the identity element).
+
+            // Generate the exponentiation tables for this segment and generator.
+            let mut tables = vec![];
+
+            let mut n_bits = 0;
+            while n_bits <= fs::Fs::NUM_BITS {
+                let mut table = Vec::with_capacity(1 << window_size);
+                let mut base = edwards::Point::zero();
+
+                for _ in 0..(1 << window_size) {
+                    table.push(base.clone());
+                    base = base.add(&generator, &params);
+                }
+
+                tables.push(table);
+                n_bits += window_size;
+
+                for _ in 0..window_size {
+                    generator = generator.double(&params);
+                }
+            }
+
+            tables
+        })
+        .collect();
+
+    params
 }
 
 #[test]
