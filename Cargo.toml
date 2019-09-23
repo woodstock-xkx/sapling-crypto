@@ -9,17 +9,12 @@ license = "MIT/Apache-2.0"
 repository = "https://github.com/filecoin-project/sapling-crypto"
 version = "0.1.1"
 
-[package.metadata.release]
-pre-release-commit-message = "chore(release): release {{version}}"
-pro-release-commit-message = "chore(release): starting development cycle for {{next_version}}"
-no-dev-version = true
-
 [dependencies]
 rand = "0.4"
 byteorder = "1"
 ff = { version = "0.4.0", features = ["derive"] }
 paired = { version = "0.15", features = ["expose-arith"] }
-bellperson = "0.2"
+bellperson = "0.3"
 blake2b_simd = "0.5"
 blake2s_simd = "0.5"
 
@@ -30,3 +25,4 @@ rust-crypto = "0.2"
 
 [features]
 default = []
+gpu = ["bellperson/gpu"]
