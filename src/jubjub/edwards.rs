@@ -7,6 +7,7 @@ use rand_core::RngCore;
 
 use std::marker::PhantomData;
 
+use std::fmt::{self, Debug, Formatter};
 use std::io::{self, Read, Write};
 
 // Represents the affine point (X/Z, Y/Z) via the extended
@@ -67,6 +68,8 @@ impl<E: JubjubEngine, Subgroup> PartialEq for Point<E, Subgroup> {
         x1 == x2 && y1 == y2
     }
 }
+
+impl<E: JubjubEngine, Subgroup> Eq for Point<E, Subgroup> {}
 
 impl<E: JubjubEngine> Point<E, Unknown> {
     pub fn read<R: Read>(reader: R, params: &E::Params) -> io::Result<Self> {
@@ -485,9 +488,30 @@ impl<E: JubjubEngine, Subgroup> Point<E, Subgroup> {
     }
 }
 
+#[derive(Clone)]
 pub struct CompressedPoint<E, Subgroup>(<E::Fr as PrimeField>::Repr, PhantomData<Subgroup>)
 where
     E: JubjubEngine;
+
+impl<E, Subgroup> Debug for CompressedPoint<E, Subgroup>
+where
+    E: JubjubEngine,
+{
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        f.debug_tuple("CompressedPoint").field(&self.0).finish()
+    }
+}
+
+impl<E, Subgroup> PartialEq for CompressedPoint<E, Subgroup>
+where
+    E: JubjubEngine,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<E: JubjubEngine, Subgroup> Eq for CompressedPoint<E, Subgroup> {}
 
 impl<E, Subgroup> CompressedPoint<E, Subgroup>
 where

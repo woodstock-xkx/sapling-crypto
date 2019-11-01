@@ -69,6 +69,7 @@ lazy_static! {
 pub enum Unknown {}
 
 /// Point of prime order.
+#[derive(Clone)]
 pub enum PrimeOrder {}
 
 /// Fixed generators of the Jubjub curve of unknown
