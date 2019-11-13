@@ -27,7 +27,7 @@ commands:
       - *restore-cache
       - run:
           name: Test (<< parameters.target >>)
-          command: TARGET=<< parameters.target >> cargo test
+          command: TARGET=<< parameters.target >> cargo test --release
           no_output_timeout: 15m
 
 jobs:

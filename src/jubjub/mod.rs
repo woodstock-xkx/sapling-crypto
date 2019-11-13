@@ -27,6 +27,9 @@ use crate::constants;
 
 use paired::bls12_381::{Bls12, Fr};
 
+use std::convert::TryInto;
+use std::slice;
+
 /// This is an implementation of the twisted Edwards Jubjub curve.
 pub mod edwards;
 
@@ -39,6 +42,9 @@ pub mod fs;
 
 #[cfg(test)]
 pub mod tests;
+
+#[cfg(target_arch = "x86_64")]
+pub mod twisted_edwards_add;
 
 /// Point of unknown order.
 pub enum Unknown {}
@@ -108,6 +114,8 @@ pub trait JubjubParams<E: JubjubEngine>: Sized {
     fn pedersen_hash_generators(&self) -> &[edwards::Point<E, PrimeOrder>];
     /// Returns the exp table for Pedersen hashes.
     fn pedersen_hash_exp_table(&self) -> &[Vec<Vec<edwards::Point<E, PrimeOrder>>>];
+    /// Returns the exp table with precomputations for Pedersen hashes.
+    fn pedersen_hash_exp_table_precomp(&self) -> &[Vec<Vec<edwards::Point<E, PrimeOrder>>>];
     /// Returns the maximum number of chunks per segment of the Pedersen hash.
     fn pedersen_hash_chunks_per_generator(&self) -> usize;
     /// Returns the pre-computed window tables [-4, 3, 2, 1, 1, 2, 3, 4] of different
@@ -140,6 +148,7 @@ pub struct JubjubBls12 {
 
     pedersen_hash_generators: Vec<edwards::Point<Bls12, PrimeOrder>>,
     pedersen_hash_exp: Vec<Vec<Vec<edwards::Point<Bls12, PrimeOrder>>>>,
+    pedersen_hash_exp_precomp: Vec<Vec<Vec<edwards::Point<Bls12, PrimeOrder>>>>,
     pedersen_circuit_generators: Vec<Vec<Vec<(Fr, Fr)>>>,
 
     fixed_base_generators: Vec<edwards::Point<Bls12, PrimeOrder>>,
@@ -165,6 +174,9 @@ impl JubjubParams<Bls12> for JubjubBls12 {
     }
     fn pedersen_hash_exp_table(&self) -> &[Vec<Vec<edwards::Point<Bls12, PrimeOrder>>>] {
         &self.pedersen_hash_exp
+    }
+    fn pedersen_hash_exp_table_precomp(&self) -> &[Vec<Vec<edwards::Point<Bls12, PrimeOrder>>>] {
+        &self.pedersen_hash_exp_precomp
     }
     fn pedersen_hash_chunks_per_generator(&self) -> usize {
         63
@@ -215,6 +227,7 @@ impl JubjubBls12 {
             // We'll initialize these below
             pedersen_hash_generators: vec![],
             pedersen_hash_exp: vec![],
+            pedersen_hash_exp_precomp: vec![],
             pedersen_circuit_generators: vec![],
             fixed_base_generators: vec![],
             fixed_base_circuit_generators: vec![],
@@ -312,6 +325,34 @@ impl JubjubBls12 {
             }
 
             tmp_params.pedersen_hash_exp = pedersen_hash_exp;
+        }
+
+        // Create the exp table precomputations for the Pedersen hash generators
+        if cfg!(target_arch = "x86_64") {
+            let mut pedersen_hash_exp_precomp = vec![];
+            for g in &tmp_params.pedersen_hash_exp {
+                let window = window_size;
+
+                let mut tables = vec![];
+                let mut base = edwards::Point::<Bls12, PrimeOrder>::zero();
+                let base_bytes =
+                    unsafe { slice::from_raw_parts_mut((&mut base as *mut _) as *mut u64, 16) };
+                for t in g {
+                    let mut table = Vec::with_capacity(1 << window);
+                    for p in t {
+                        let p2 =
+                            unsafe { slice::from_raw_parts((p as *const _) as *const u64, 16) };
+                        twisted_edwards_add::ext_twisted_ed_precomp_256(
+                            p2.try_into().expect("needs len of 16"),
+                            base_bytes.try_into().expect("needs len of 16"),
+                        );
+                        table.push(base.clone());
+                    }
+                    tables.push(table);
+                }
+                pedersen_hash_exp_precomp.push(tables);
+            }
+            tmp_params.pedersen_hash_exp_precomp = pedersen_hash_exp_precomp;
         }
 
         // Create the bases for other parts of the protocol
