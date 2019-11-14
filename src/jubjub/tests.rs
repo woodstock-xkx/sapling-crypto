@@ -2,7 +2,9 @@ use super::{edwards, montgomery, JubjubEngine, JubjubParams, PrimeOrder};
 
 use ff::{Field, LegendreSymbol, PrimeField, PrimeFieldRepr, SqrtField};
 
-use rand::{Rand, SeedableRng, XorShiftRng};
+use rand::Rng;
+use rand_core::SeedableRng;
+use rand_xorshift::XorShiftRng;
 
 pub fn test_suite<E: JubjubEngine>(params: &E::Params) {
     test_back_and_forth::<E>(params);
@@ -60,12 +62,15 @@ fn is_on_twisted_edwards_curve<E: JubjubEngine, P: JubjubParams<E>>(
 }
 
 fn test_loworder<E: JubjubEngine>(params: &E::Params) {
-    let rng = &mut XorShiftRng::from_seed([0x3dbe6259, 0x8d313d76, 0x3237db17, 0xe5bc0654]);
+    let mut rng = XorShiftRng::from_seed([
+        0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06, 0xbc,
+        0xe5,
+    ]);
     let inf = montgomery::Point::zero();
 
     // try to find a point of order 8
     let p = loop {
-        let r = montgomery::Point::<E, _>::rand(rng, params).mul(E::Fs::char(), params);
+        let r = montgomery::Point::<E, _>::random(&mut rng, params).mul(E::Fs::char(), params);
 
         let r2 = r.double(params);
         let r4 = r2.double(params);
@@ -91,15 +96,18 @@ fn test_loworder<E: JubjubEngine>(params: &E::Params) {
 
 fn test_mul_associativity<E: JubjubEngine>(params: &E::Params) {
     use self::edwards::Point;
-    let rng = &mut XorShiftRng::from_seed([0x3dbe6259, 0x8d313d76, 0x3237db17, 0xe5bc0654]);
+    let mut rng = XorShiftRng::from_seed([
+        0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06, 0xbc,
+        0xe5,
+    ]);
 
     for _ in 0..100 {
         // Pick a random point and multiply it by the cofactor
-        let base = Point::<E, _>::rand(rng, params).mul_by_cofactor(params);
+        let base = Point::<E, _>::random(&mut rng, params).mul_by_cofactor(params);
 
-        let mut a = E::Fs::rand(rng);
-        let b = E::Fs::rand(rng);
-        let c = E::Fs::rand(rng);
+        let mut a = E::Fs::random(&mut rng);
+        let b = E::Fs::random(&mut rng);
+        let c = E::Fs::random(&mut rng);
 
         let res1 = base.mul(a, params).mul(b, params).mul(c, params);
         let res2 = base.mul(b, params).mul(c, params).mul(a, params);
@@ -125,7 +133,10 @@ fn test_mul_associativity<E: JubjubEngine>(params: &E::Params) {
 
 fn test_order<E: JubjubEngine>(params: &E::Params) {
     use self::edwards::Point;
-    let rng = &mut XorShiftRng::from_seed([0x3dbe6259, 0x8d313d76, 0x3237db17, 0xe5bc0654]);
+    let mut rng = XorShiftRng::from_seed([
+        0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06, 0xbc,
+        0xe5,
+    ]);
 
     // The neutral element is in the prime order subgroup.
     assert!(Point::<E, PrimeOrder>::zero()
@@ -134,7 +145,7 @@ fn test_order<E: JubjubEngine>(params: &E::Params) {
 
     for _ in 0..50 {
         // Pick a random point and multiply it by the cofactor
-        let base = Point::<E, _>::rand(rng, params).mul_by_cofactor(params);
+        let base = Point::<E, _>::random(&mut rng, params).mul_by_cofactor(params);
 
         // Any point multiplied by the cofactor will be in the prime
         // order subgroup
@@ -146,7 +157,7 @@ fn test_order<E: JubjubEngine>(params: &E::Params) {
     let mut at_least_one_not_in_prime_order_subgroup = false;
     for _ in 0..50 {
         // Pick a random point.
-        let base = Point::<E, _>::rand(rng, params);
+        let base = Point::<E, _>::random(&mut rng, params);
 
         at_least_one_not_in_prime_order_subgroup |= base.as_prime_order(params).is_none();
     }
@@ -154,14 +165,17 @@ fn test_order<E: JubjubEngine>(params: &E::Params) {
 }
 
 fn test_addition_associativity<E: JubjubEngine>(params: &E::Params) {
-    let rng = &mut XorShiftRng::from_seed([0x3dbe6259, 0x8d313d76, 0x3237db17, 0xe5bc0654]);
+    let mut rng = XorShiftRng::from_seed([
+        0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06, 0xbc,
+        0xe5,
+    ]);
 
     for _ in 0..1000 {
         use self::montgomery::Point;
 
-        let a = Point::<E, _>::rand(rng, params);
-        let b = Point::<E, _>::rand(rng, params);
-        let c = Point::<E, _>::rand(rng, params);
+        let a = Point::<E, _>::random(&mut rng, params);
+        let b = Point::<E, _>::random(&mut rng, params);
+        let c = Point::<E, _>::random(&mut rng, params);
 
         assert!(a.add(&b, &params).add(&c, &params) == c.add(&a, &params).add(&b, &params));
     }
@@ -169,16 +183,19 @@ fn test_addition_associativity<E: JubjubEngine>(params: &E::Params) {
     for _ in 0..1000 {
         use self::edwards::Point;
 
-        let a = Point::<E, _>::rand(rng, params);
-        let b = Point::<E, _>::rand(rng, params);
-        let c = Point::<E, _>::rand(rng, params);
+        let a = Point::<E, _>::random(&mut rng, params);
+        let b = Point::<E, _>::random(&mut rng, params);
+        let c = Point::<E, _>::random(&mut rng, params);
 
         assert!(a.add(&b, &params).add(&c, &params) == c.add(&a, &params).add(&b, &params));
     }
 }
 
 fn test_identities<E: JubjubEngine>(params: &E::Params) {
-    let rng = &mut XorShiftRng::from_seed([0x3dbe6259, 0x8d313d76, 0x3237db17, 0xe5bc0654]);
+    let mut rng = XorShiftRng::from_seed([
+        0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06, 0xbc,
+        0xe5,
+    ]);
 
     {
         use self::edwards::Point;
@@ -188,7 +205,7 @@ fn test_identities<E: JubjubEngine>(params: &E::Params) {
         assert!(z.negate() == z);
 
         for _ in 0..100 {
-            let r = Point::<E, _>::rand(rng, params);
+            let r = Point::<E, _>::random(&mut rng, params);
 
             assert!(r.add(&Point::zero(), &params) == r);
             assert!(r.add(&r.negate(), &params) == Point::zero());
@@ -203,7 +220,7 @@ fn test_identities<E: JubjubEngine>(params: &E::Params) {
         assert!(z.negate() == z);
 
         for _ in 0..100 {
-            let r = Point::<E, _>::rand(rng, params);
+            let r = Point::<E, _>::random(&mut rng, params);
 
             assert!(r.add(&Point::zero(), &params) == r);
             assert!(r.add(&r.negate(), &params) == Point::zero());
@@ -212,11 +229,14 @@ fn test_identities<E: JubjubEngine>(params: &E::Params) {
 }
 
 fn test_get_for<E: JubjubEngine>(params: &E::Params) {
-    let rng = &mut XorShiftRng::from_seed([0x3dbe6259, 0x8d313d76, 0x3237db17, 0xe5bc0654]);
+    let mut rng = XorShiftRng::from_seed([
+        0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06, 0xbc,
+        0xe5,
+    ]);
 
     for _ in 0..1000 {
-        let y = E::Fr::rand(rng);
-        let sign = bool::rand(rng);
+        let y = E::Fr::random(&mut rng);
+        let sign = rng.gen();
 
         if let Some(mut p) = edwards::Point::<E, _>::get_for_y(y, sign, params) {
             assert!(p.into_xy().0.into_repr().is_odd() == sign);
@@ -227,10 +247,13 @@ fn test_get_for<E: JubjubEngine>(params: &E::Params) {
 }
 
 fn test_read_write<E: JubjubEngine>(params: &E::Params) {
-    let rng = &mut XorShiftRng::from_seed([0x3dbe6259, 0x8d313d76, 0x3237db17, 0xe5bc0654]);
+    let mut rng = XorShiftRng::from_seed([
+        0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06, 0xbc,
+        0xe5,
+    ]);
 
     for _ in 0..1000 {
-        let e = edwards::Point::<E, _>::rand(rng, params);
+        let e = edwards::Point::<E, _>::random(&mut rng, params);
 
         let mut v = vec![];
         e.write(&mut v).unwrap();
@@ -242,11 +265,14 @@ fn test_read_write<E: JubjubEngine>(params: &E::Params) {
 }
 
 fn test_rand<E: JubjubEngine>(params: &E::Params) {
-    let rng = &mut XorShiftRng::from_seed([0x3dbe6259, 0x8d313d76, 0x3237db17, 0xe5bc0654]);
+    let mut rng = XorShiftRng::from_seed([
+        0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06, 0xbc,
+        0xe5,
+    ]);
 
     for _ in 0..1000 {
-        let p = montgomery::Point::<E, _>::rand(rng, params);
-        let e = edwards::Point::<E, _>::rand(rng, params);
+        let p = montgomery::Point::<E, _>::random(&mut rng, params);
+        let e = edwards::Point::<E, _>::random(&mut rng, params);
 
         {
             let (x, y) = p.into_xy().unwrap();
@@ -261,13 +287,16 @@ fn test_rand<E: JubjubEngine>(params: &E::Params) {
 }
 
 fn test_back_and_forth<E: JubjubEngine>(params: &E::Params) {
-    let rng = &mut XorShiftRng::from_seed([0x5dbe6259, 0x8d313d76, 0x3237db17, 0xe5bc0654]);
+    let mut rng = XorShiftRng::from_seed([
+        0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06, 0xbc,
+        0xe5,
+    ]);
 
     for _ in 0..1000 {
-        let s = E::Fs::rand(rng);
-        let edwards_p1 = edwards::Point::<E, _>::rand(rng, params);
+        let s = E::Fs::random(&mut rng);
+        let edwards_p1 = edwards::Point::<E, _>::random(&mut rng, params);
         let mont_p1 = montgomery::Point::from_edwards(&edwards_p1, params);
-        let mont_p2 = montgomery::Point::<E, _>::rand(rng, params);
+        let mont_p2 = montgomery::Point::<E, _>::random(&mut rng, params);
         let edwards_p2 = edwards::Point::from_montgomery(&mont_p2, params);
 
         let mont = mont_p1.add(&mont_p2, params).mul(s, params);

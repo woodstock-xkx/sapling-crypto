@@ -2,11 +2,11 @@
 //! See section 5.4.6 of the Sapling protocol specification.
 
 use ff::{Field, PrimeField, PrimeFieldRepr};
-use rand::{Rand, Rng};
+use rand_core::RngCore;
 use std::io::{self, Read, Write};
 
-use jubjub::{edwards::Point, FixedGenerators, JubjubEngine, JubjubParams, Unknown};
-use util::hash_to_scalar;
+use crate::jubjub::{edwards::Point, FixedGenerators, JubjubEngine, JubjubParams, Unknown};
+use crate::util::hash_to_scalar;
 
 fn read_scalar<E: JubjubEngine, R: Read>(reader: R) -> io::Result<E::Fs> {
     let mut s_repr = <E::Fs as PrimeField>::Repr::default();
@@ -70,7 +70,7 @@ impl<E: JubjubEngine> PrivateKey<E> {
         write_scalar::<E, W>(&self.0, writer)
     }
 
-    pub fn sign<R: Rng>(
+    pub fn sign<R: RngCore>(
         &self,
         msg: &[u8],
         rng: &mut R,
@@ -167,7 +167,7 @@ pub struct BatchEntry<'a, E: JubjubEngine> {
 
 // TODO: #82: This is a naive implementation currently,
 // and doesn't use multiexp.
-pub fn batch_verify<'a, E: JubjubEngine, R: Rng>(
+pub fn batch_verify<'a, E: JubjubEngine, R: RngCore>(
     rng: &mut R,
     batch: &[BatchEntry<'a, E>],
     p_g: FixedGenerators,
@@ -187,7 +187,7 @@ pub fn batch_verify<'a, E: JubjubEngine, R: Rng>(
 
         let mut c = h_star::<E>(&entry.sig.rbar[..], entry.msg);
 
-        let z = E::Fs::rand(rng);
+        let z = E::Fs::random(rng);
 
         s.mul_assign(&z);
         s.negate();
@@ -211,26 +211,26 @@ mod tests {
     use paired::bls12_381::Bls12;
     use rand::thread_rng;
 
-    use jubjub::{edwards, fs::Fs, JubjubBls12};
+    use crate::jubjub::{edwards, fs::Fs, JubjubBls12};
 
     use super::*;
 
     #[test]
     fn test_batch_verify() {
-        let rng = &mut thread_rng();
+        let mut rng = thread_rng();
         let params = &JubjubBls12::new();
         let p_g = FixedGenerators::SpendingKeyGenerator;
 
-        let sk1 = PrivateKey::<Bls12>(rng.gen());
+        let sk1 = PrivateKey::<Bls12>(Fs::random(&mut rng));
         let vk1 = PublicKey::from_private(&sk1, p_g, params);
         let msg1 = b"Foo bar";
-        let sig1 = sk1.sign(msg1, rng, p_g, params);
+        let sig1 = sk1.sign(msg1, &mut rng, p_g, params);
         assert!(vk1.verify(msg1, &sig1, p_g, params));
 
-        let sk2 = PrivateKey::<Bls12>(rng.gen());
+        let sk2 = PrivateKey::<Bls12>(Fs::random(&mut rng));
         let vk2 = PublicKey::from_private(&sk2, p_g, params);
         let msg2 = b"Foo bar";
-        let sig2 = sk2.sign(msg2, rng, p_g, params);
+        let sig2 = sk2.sign(msg2, &mut rng, p_g, params);
         assert!(vk2.verify(msg2, &sig2, p_g, params));
 
         let mut batch = vec![
@@ -246,11 +246,11 @@ mod tests {
             },
         ];
 
-        assert!(batch_verify(rng, &batch, p_g, params));
+        assert!(batch_verify(&mut rng, &batch, p_g, params));
 
         batch[0].sig = sig2;
 
-        assert!(!batch_verify(rng, &batch, p_g, params));
+        assert!(!batch_verify(&mut rng, &batch, p_g, params));
     }
 
     #[test]
@@ -262,7 +262,7 @@ mod tests {
 
         // Get a point of order 8
         let p8 = loop {
-            let r = edwards::Point::<Bls12, _>::rand(rng, params).mul(Fs::char(), params);
+            let r = edwards::Point::<Bls12, _>::random(rng, params).mul(Fs::char(), params);
 
             let r2 = r.double(params);
             let r4 = r2.double(params);
@@ -273,7 +273,7 @@ mod tests {
             }
         };
 
-        let sk = PrivateKey::<Bls12>(rng.gen());
+        let sk = PrivateKey::<Bls12>(Fs::random(rng));
         let vk = PublicKey::from_private(&sk, p_g, params);
 
         // TODO: This test will need to change when #77 is fixed
@@ -292,7 +292,7 @@ mod tests {
         let params = &JubjubBls12::new();
 
         for _ in 0..1000 {
-            let sk = PrivateKey::<Bls12>(rng.gen());
+            let sk = PrivateKey::<Bls12>(Fs::random(rng));
             let vk = PublicKey::from_private(&sk, p_g, params);
             let msg = b"Foo bar";
             let sig = sk.sign(msg, rng, p_g, params);
@@ -325,7 +325,7 @@ mod tests {
         let params = &JubjubBls12::new();
 
         for _ in 0..1000 {
-            let sk = PrivateKey::<Bls12>(rng.gen());
+            let sk = PrivateKey::<Bls12>(Fs::random(rng));
             let vk = PublicKey::from_private(&sk, p_g, params);
 
             let msg1 = b"Foo bar";
@@ -339,7 +339,7 @@ mod tests {
             assert!(!vk.verify(msg1, &sig2, p_g, params));
             assert!(!vk.verify(msg2, &sig1, p_g, params));
 
-            let alpha = rng.gen();
+            let alpha = Fs::random(rng);
             let rsk = sk.randomize(alpha);
             let rvk = vk.randomize(alpha, p_g, params);
 

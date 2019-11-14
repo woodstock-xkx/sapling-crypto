@@ -1,4 +1,4 @@
-use jubjub::{JubjubEngine, ToUniform};
+use crate::jubjub::{JubjubEngine, ToUniform};
 
 pub fn hash_to_scalar<E: JubjubEngine>(persona: &[u8], a: &[u8], b: &[u8]) -> E::Fs {
     let mut params = blake2b_simd::Params::new();

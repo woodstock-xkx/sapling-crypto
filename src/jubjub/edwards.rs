@@ -3,6 +3,7 @@ use ff::{BitIterator, Field, PrimeField, PrimeFieldRepr, SqrtField};
 use super::{montgomery, JubjubEngine, JubjubParams, PrimeOrder, Unknown};
 
 use rand::Rng;
+use rand_core::RngCore;
 
 use std::marker::PhantomData;
 
@@ -141,9 +142,9 @@ impl<E: JubjubEngine> Point<E, Unknown> {
         convert_subgroup(&tmp)
     }
 
-    pub fn rand<R: Rng>(rng: &mut R, params: &E::Params) -> Self {
+    pub fn random<R: RngCore>(rng: &mut R, params: &E::Params) -> Self {
         loop {
-            let y: E::Fr = rng.gen();
+            let y = E::Fr::random(rng);
 
             if let Some(p) = Self::get_for_y(y, rng.gen(), params) {
                 return p;

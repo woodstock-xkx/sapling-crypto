@@ -4,15 +4,14 @@ use ff::Field;
 
 use bellperson::{ConstraintSystem, SynthesisError};
 
-use super::Assignment;
+use bellperson::gadgets::{
+    boolean::Boolean,
+    lookup::lookup3_xy,
+    num::{AllocatedNum, Num},
+    Assignment,
+};
 
-use super::num::{AllocatedNum, Num};
-
-use jubjub::{edwards, FixedGenerators, JubjubEngine, JubjubParams};
-
-use super::lookup::lookup3_xy;
-
-use super::boolean::Boolean;
+use crate::jubjub::{edwards, FixedGenerators, JubjubEngine, JubjubParams};
 
 #[derive(Clone)]
 pub struct EdwardsPoint<E: Engine> {
@@ -122,9 +121,9 @@ impl<E: JubjubEngine> EdwardsPoint<E> {
     {
         let mut tmp = vec![];
 
-        let x = self.x.into_bits_le_strict(cs.namespace(|| "unpack x"))?;
+        let x = self.x.to_bits_le_strict(cs.namespace(|| "unpack x"))?;
 
-        let y = self.y.into_bits_le_strict(cs.namespace(|| "unpack y"))?;
+        let y = self.y.to_bits_le_strict(cs.namespace(|| "unpack y"))?;
 
         tmp.extend(y);
         tmp.push(x[0].clone());
@@ -662,25 +661,31 @@ impl<E: JubjubEngine> MontgomeryPoint<E> {
 
 #[cfg(test)]
 mod test {
-    use super::super::boolean::{AllocatedBit, Boolean};
-    use super::{fixed_base_multiplication, AllocatedNum, EdwardsPoint, MontgomeryPoint};
+    use super::{fixed_base_multiplication, EdwardsPoint, MontgomeryPoint};
+    use crate::jubjub::fs::Fs;
+    use crate::jubjub::{edwards, montgomery, FixedGenerators, JubjubBls12, JubjubParams};
+    use bellperson::gadgets::boolean::{AllocatedBit, Boolean};
+    use bellperson::gadgets::num::AllocatedNum;
+    use bellperson::gadgets::test::*;
     use bellperson::ConstraintSystem;
-    use circuit::test::*;
     use ff::{BitIterator, Field, PrimeField};
-    use jubjub::fs::Fs;
-    use jubjub::{edwards, montgomery, FixedGenerators, JubjubBls12, JubjubParams};
     use paired::bls12_381::{Bls12, Fr};
-    use rand::{Rand, Rng, SeedableRng, XorShiftRng};
+    use rand::Rng;
+    use rand_core::SeedableRng;
+    use rand_xorshift::XorShiftRng;
 
     #[test]
     fn test_into_edwards() {
         let params = &JubjubBls12::new();
-        let rng = &mut XorShiftRng::from_seed([0x3dbe6259, 0x8d313d76, 0x3237db17, 0xe5bc0654]);
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
 
         for _ in 0..100 {
             let mut cs = TestConstraintSystem::<Bls12>::new();
 
-            let p = montgomery::Point::<Bls12, _>::rand(rng, params);
+            let p = montgomery::Point::<Bls12, _>::random(&mut rng, params);
             let (u, v) = edwards::Point::from_montgomery(&p, params).into_xy();
             let (x, y) = p.into_xy().unwrap();
 
@@ -695,12 +700,12 @@ mod test {
             assert!(q.x.get_value().unwrap() == u);
             assert!(q.y.get_value().unwrap() == v);
 
-            cs.set("u/num", rng.gen());
+            cs.set("u/num", Fr::random(&mut rng));
             assert_eq!(cs.which_is_unsatisfied().unwrap(), "u computation");
             cs.set("u/num", u);
             assert!(cs.is_satisfied());
 
-            cs.set("v/num", rng.gen());
+            cs.set("v/num", Fr::random(&mut rng));
             assert_eq!(cs.which_is_unsatisfied().unwrap(), "v computation");
             cs.set("v/num", v);
             assert!(cs.is_satisfied());
@@ -710,10 +715,13 @@ mod test {
     #[test]
     fn test_interpret() {
         let params = &JubjubBls12::new();
-        let rng = &mut XorShiftRng::from_seed([0x5dbe6259, 0x8d313d76, 0x3237db17, 0xe5bc0654]);
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
 
         for _ in 0..100 {
-            let p = edwards::Point::<Bls12, _>::rand(rng, &params);
+            let p = edwards::Point::<Bls12, _>::random(&mut rng, &params);
 
             let mut cs = TestConstraintSystem::<Bls12>::new();
             let q = EdwardsPoint::witness(&mut cs, Some(p.clone()), &params).unwrap();
@@ -726,7 +734,7 @@ mod test {
         }
 
         for _ in 0..100 {
-            let p = edwards::Point::<Bls12, _>::rand(rng, &params);
+            let p = edwards::Point::<Bls12, _>::random(&mut rng, &params);
             let (x, y) = p.into_xy();
 
             let mut cs = TestConstraintSystem::<Bls12>::new();
@@ -742,8 +750,8 @@ mod test {
 
         // Random (x, y) are unlikely to be on the curve.
         for _ in 0..100 {
-            let x = rng.gen();
-            let y = rng.gen();
+            let x = Fr::random(&mut rng);
+            let y = Fr::random(&mut rng);
 
             let mut cs = TestConstraintSystem::<Bls12>::new();
             let numx = AllocatedNum::alloc(cs.namespace(|| "x"), || Ok(x)).unwrap();
@@ -758,13 +766,16 @@ mod test {
     #[test]
     fn test_edwards_fixed_base_multiplication() {
         let params = &JubjubBls12::new();
-        let rng = &mut XorShiftRng::from_seed([0x5dbe6259, 0x8d313d76, 0x3237db17, 0xe5bc0654]);
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
 
         for _ in 0..100 {
             let mut cs = TestConstraintSystem::<Bls12>::new();
 
             let p = params.generator(FixedGenerators::NoteCommitmentRandomness);
-            let s = Fs::rand(rng);
+            let s = Fs::random(&mut rng);
             let q = p.mul(s, params);
             let (x1, y1) = q.into_xy();
 
@@ -798,13 +809,16 @@ mod test {
     #[test]
     fn test_edwards_multiplication() {
         let params = &JubjubBls12::new();
-        let rng = &mut XorShiftRng::from_seed([0x5dbe6259, 0x8d313d76, 0x3237db17, 0xe5bc0654]);
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
 
         for _ in 0..100 {
             let mut cs = TestConstraintSystem::<Bls12>::new();
 
-            let p = edwards::Point::<Bls12, _>::rand(rng, params);
-            let s = Fs::rand(rng);
+            let p = edwards::Point::<Bls12, _>::random(&mut rng, params);
+            let s = Fs::random(&mut rng);
             let q = p.mul(s, params);
 
             let (x0, y0) = p.into_xy();
@@ -847,12 +861,15 @@ mod test {
     #[test]
     fn test_conditionally_select() {
         let params = &JubjubBls12::new();
-        let rng = &mut XorShiftRng::from_seed([0x5dbe6259, 0x8d313d76, 0x3237db17, 0xe5bc0654]);
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
 
         for _ in 0..1000 {
             let mut cs = TestConstraintSystem::<Bls12>::new();
 
-            let p = edwards::Point::<Bls12, _>::rand(rng, params);
+            let p = edwards::Point::<Bls12, _>::random(&mut rng, params);
 
             let (x0, y0) = p.into_xy();
 
@@ -911,11 +928,14 @@ mod test {
     #[test]
     fn test_edwards_addition() {
         let params = &JubjubBls12::new();
-        let rng = &mut XorShiftRng::from_seed([0x5dbe6259, 0x8d313d76, 0x3237db17, 0xe5bc0654]);
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
 
         for _ in 0..100 {
-            let p1 = edwards::Point::<Bls12, _>::rand(rng, params);
-            let p2 = edwards::Point::<Bls12, _>::rand(rng, params);
+            let p1 = edwards::Point::<Bls12, _>::random(&mut rng, params);
+            let p2 = edwards::Point::<Bls12, _>::random(&mut rng, params);
 
             let p3 = p1.add(&p2, params);
 
@@ -949,19 +969,19 @@ mod test {
             assert!(p3.y.get_value().unwrap() == y2);
 
             let u = cs.get("addition/U/num");
-            cs.set("addition/U/num", rng.gen());
+            cs.set("addition/U/num", Fr::random(&mut rng));
             assert_eq!(cs.which_is_unsatisfied(), Some("addition/U computation"));
             cs.set("addition/U/num", u);
             assert!(cs.is_satisfied());
 
             let x3 = cs.get("addition/x3/num");
-            cs.set("addition/x3/num", rng.gen());
+            cs.set("addition/x3/num", Fr::random(&mut rng));
             assert_eq!(cs.which_is_unsatisfied(), Some("addition/x3 computation"));
             cs.set("addition/x3/num", x3);
             assert!(cs.is_satisfied());
 
             let y3 = cs.get("addition/y3/num");
-            cs.set("addition/y3/num", rng.gen());
+            cs.set("addition/y3/num", Fr::random(&mut rng));
             assert_eq!(cs.which_is_unsatisfied(), Some("addition/y3 computation"));
             cs.set("addition/y3/num", y3);
             assert!(cs.is_satisfied());
@@ -971,10 +991,13 @@ mod test {
     #[test]
     fn test_edwards_doubling() {
         let params = &JubjubBls12::new();
-        let rng = &mut XorShiftRng::from_seed([0x5dbe6259, 0x8d313d76, 0x3237db17, 0xe5bc0654]);
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
 
         for _ in 0..100 {
-            let p1 = edwards::Point::<Bls12, _>::rand(rng, params);
+            let p1 = edwards::Point::<Bls12, _>::random(&mut rng, params);
             let p2 = p1.double(params);
 
             let (x0, y0) = p1.into_xy();
@@ -1002,11 +1025,14 @@ mod test {
     #[test]
     fn test_montgomery_addition() {
         let params = &JubjubBls12::new();
-        let rng = &mut XorShiftRng::from_seed([0x5dbe6259, 0x8d313d76, 0x3237db17, 0xe5bc0654]);
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
 
         for _ in 0..100 {
             let p1 = loop {
-                let x: Fr = rng.gen();
+                let x: Fr = Fr::random(&mut rng);
                 let s: bool = rng.gen();
 
                 if let Some(p) = montgomery::Point::<Bls12, _>::get_for_x(x, s, params) {
@@ -1015,7 +1041,7 @@ mod test {
             };
 
             let p2 = loop {
-                let x: Fr = rng.gen();
+                let x: Fr = Fr::random(&mut rng);
                 let s: bool = rng.gen();
 
                 if let Some(p) = montgomery::Point::<Bls12, _>::get_for_x(x, s, params) {
@@ -1054,17 +1080,17 @@ mod test {
             assert!(p3.x.get_value().unwrap() == x2);
             assert!(p3.y.get_value().unwrap() == y2);
 
-            cs.set("addition/yprime/num", rng.gen());
+            cs.set("addition/yprime/num", Fr::random(&mut rng));
             assert_eq!(cs.which_is_unsatisfied(), Some("addition/evaluate yprime"));
             cs.set("addition/yprime/num", y2);
             assert!(cs.is_satisfied());
 
-            cs.set("addition/xprime/num", rng.gen());
+            cs.set("addition/xprime/num", Fr::random(&mut rng));
             assert_eq!(cs.which_is_unsatisfied(), Some("addition/evaluate xprime"));
             cs.set("addition/xprime/num", x2);
             assert!(cs.is_satisfied());
 
-            cs.set("addition/lambda/num", rng.gen());
+            cs.set("addition/lambda/num", Fr::random(&mut rng));
             assert_eq!(cs.which_is_unsatisfied(), Some("addition/evaluate lambda"));
         }
     }
