@@ -329,30 +329,32 @@ impl JubjubBls12 {
 
         // Create the exp table precomputations for the Pedersen hash generators
         if cfg!(target_arch = "x86_64") {
-            let mut pedersen_hash_exp_precomp = vec![];
-            for g in &tmp_params.pedersen_hash_exp {
-                let window = window_size;
+            if *crate::pedersen_hash::CPU_SUPPORTS_ADX_INSTRUCTION {
+                let mut pedersen_hash_exp_precomp = vec![];
+                for g in &tmp_params.pedersen_hash_exp {
+                    let window = window_size;
 
-                let mut tables = vec![];
-                let mut base = edwards::Point::<Bls12, PrimeOrder>::zero();
-                let base_bytes =
-                    unsafe { slice::from_raw_parts_mut((&mut base as *mut _) as *mut u64, 16) };
-                for t in g {
-                    let mut table = Vec::with_capacity(1 << window);
-                    for p in t {
-                        let p2 =
-                            unsafe { slice::from_raw_parts((p as *const _) as *const u64, 16) };
-                        twisted_edwards_add::ext_twisted_ed_precomp_256(
-                            p2.try_into().expect("needs len of 16"),
-                            base_bytes.try_into().expect("needs len of 16"),
-                        );
-                        table.push(base.clone());
+                    let mut tables = vec![];
+                    let mut base = edwards::Point::<Bls12, PrimeOrder>::zero();
+                    let base_bytes =
+                        unsafe { slice::from_raw_parts_mut((&mut base as *mut _) as *mut u64, 16) };
+                    for t in g {
+                        let mut table = Vec::with_capacity(1 << window);
+                        for p in t {
+                            let p2 =
+                                unsafe { slice::from_raw_parts((p as *const _) as *const u64, 16) };
+                            twisted_edwards_add::ext_twisted_ed_precomp_256(
+                                p2.try_into().expect("needs len of 16"),
+                                base_bytes.try_into().expect("needs len of 16"),
+                            );
+                            table.push(base.clone());
+                        }
+                        tables.push(table);
                     }
-                    tables.push(table);
+                    pedersen_hash_exp_precomp.push(tables);
                 }
-                pedersen_hash_exp_precomp.push(tables);
+                tmp_params.pedersen_hash_exp_precomp = pedersen_hash_exp_precomp;
             }
-            tmp_params.pedersen_hash_exp_precomp = pedersen_hash_exp_precomp;
         }
 
         // Create the bases for other parts of the protocol
