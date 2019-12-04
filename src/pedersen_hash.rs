@@ -10,7 +10,7 @@ use paired::bls12_381::Bls12;
 use crate::jubjub::*;
 
 lazy_static! {
-    static ref CPU_SUPPORTS_ADX_INSTRUCTION: bool = is_x86_feature_detected!("adx");
+    pub static ref CPU_SUPPORTS_ADX_INSTRUCTION: bool = is_x86_feature_detected!("adx");
 }
 
 #[derive(Copy, Clone)]
