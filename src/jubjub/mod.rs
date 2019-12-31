@@ -354,6 +354,11 @@ impl JubjubBls12 {
                     pedersen_hash_exp_precomp.push(tables);
                 }
                 tmp_params.pedersen_hash_exp_precomp = pedersen_hash_exp_precomp;
+
+                // If we are using the precomputed exp-table (we are on x86-64 and the ADX
+                // instruction set is available) we have no further use for the non-precomputed
+                // exp-table, we set it to an empty vector to save the memory.
+                tmp_params.pedersen_hash_exp_table = vec![];
             }
         }
 
